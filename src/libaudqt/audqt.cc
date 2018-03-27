@@ -56,9 +56,13 @@ EXPORT void init ()
 #if QT_VERSION >= QT_VERSION_CHECK(5, 3, 0)
     qapp->setAttribute (Qt::AA_ForceRasterWidgets);
 #endif
+#if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+    qapp->setAttribute (Qt::AA_UseStyleSheetPropagationInWidgetStyles);
+#endif
 
     qapp->setApplicationName (_("Audacious"));
-    qapp->setWindowIcon (audqt::get_icon (app_name));
+    if (qapp->windowIcon ().isNull ())
+        qapp->setWindowIcon (audqt::get_icon (app_name));
 
     auto desktop = qapp->desktop ();
     sizes_local.OneInch = aud::max (96, (desktop->logicalDpiX () + desktop->logicalDpiY ()) / 2);
@@ -69,6 +73,12 @@ EXPORT void init ()
     margins_local.TwoPt = QMargins (sizes.TwoPt, sizes.TwoPt, sizes.TwoPt, sizes.TwoPt);
     margins_local.FourPt = QMargins (sizes.FourPt, sizes.FourPt, sizes.FourPt, sizes.FourPt);
     margins_local.EightPt = QMargins (sizes.EightPt, sizes.EightPt, sizes.EightPt, sizes.EightPt);
+
+#ifdef Q_OS_MAC  // Mac-specific font tweaks
+    QApplication::setFont (QApplication::font ("QSmallFont"), "QDialog");
+    QApplication::setFont (QApplication::font ("QSmallFont"), "QTreeView");
+    QApplication::setFont (QApplication::font ("QTipLabel"), "QStatusBar");
+#endif
 
     log_init ();
 }

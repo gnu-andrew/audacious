@@ -19,6 +19,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "audtool.h"
 #include "wrappers.h"
@@ -88,6 +89,10 @@ void shutdown_audacious_server (int argc, char * * argv)
 
 void get_handlers_list (int argc, char * * argv)
 {
+    audtool_report ("Usage: audtool [-#] COMMAND ...");
+    audtool_report ("       where # (1-9) selects the instance of Audacious to control");
+    audtool_report ("");
+
     for (int i = 0; handlers[i].name; i ++)
     {
         if (! g_ascii_strcasecmp ("<sep>", handlers[i].name))
@@ -97,8 +102,9 @@ void get_handlers_list (int argc, char * * argv)
     }
 
     audtool_report ("");
-    audtool_report ("Handlers may be prefixed with `--' (GNU-style long-options) or not, your choice.");
-    audtool_report ("Report bugs to http://redmine.audacious-media-player.org/");
+    audtool_report ("Commands may be prefixed with '--' (GNU-style long options) or not, your choice.");
+    audtool_report ("Show/hide and enable/disable commands take an optional 'on' or 'off' argument.");
+    audtool_report ("Report bugs to http://redmine.audacious-media-player.org/projects/audacious");
 }
 
 void get_version (int argc, char * * argv)
@@ -111,4 +117,84 @@ void get_version (int argc, char * * argv)
 
     audtool_report ("Audacious %s", version);
     g_free (version);
+}
+
+void plugin_is_enabled (int argc, char * * argv)
+{
+    if (argc != 2)
+    {
+        audtool_whine_args (argv[0], "<plugin>");
+        exit (1);
+    }
+
+    gboolean enabled = FALSE;
+    obj_audacious_call_plugin_is_enabled_sync (dbus_proxy, argv[1], & enabled, NULL, NULL);
+
+    exit (! enabled);
+}
+
+void plugin_enable (int argc, char * * argv)
+{
+    gboolean enable = TRUE;
+
+    if (argc == 2)
+        enable = TRUE;
+    else if (argc == 3 && ! g_ascii_strcasecmp (argv[2], "on"))
+        enable = TRUE;
+    else if (argc == 3 && ! g_ascii_strcasecmp (argv[2], "off"))
+        enable = FALSE;
+    else
+    {
+        audtool_whine_args (argv[0], "<plugin> <on/off>");
+        exit (1);
+    }
+
+    obj_audacious_call_plugin_enable_sync (dbus_proxy, argv[1], enable, NULL, NULL);
+}
+
+void config_get (int argc, char * * argv)
+{
+    if (argc != 2)
+    {
+        audtool_whine_args (argv[0], "[<section>:]<name>");
+        exit (1);
+    }
+
+    const char * section = "";
+    const char * name = argv[1];
+    char * colon = strchr (argv[1], ':');
+
+    if (colon)
+    {
+        * colon = 0;
+        section = argv[1];
+        name = colon + 1;
+    }
+
+    char * value = NULL;
+    obj_audacious_call_config_get_sync (dbus_proxy, section, name, & value, NULL, NULL);
+    audtool_report (value);
+    g_free (value);
+}
+
+void config_set (int argc, char * * argv)
+{
+    if (argc != 3)
+    {
+        audtool_whine_args (argv[0], "[<section>:]<name> <value>");
+        exit (1);
+    }
+
+    const char * section = "";
+    const char * name = argv[1];
+    char * colon = strchr (argv[1], ':');
+
+    if (colon)
+    {
+        * colon = 0;
+        section = argv[1];
+        name = colon + 1;
+    }
+
+    obj_audacious_call_config_set_sync (dbus_proxy, section, name, argv[2], NULL, NULL);
 }

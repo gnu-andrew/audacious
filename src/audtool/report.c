@@ -69,14 +69,14 @@ void audtool_whine_tuple_fields (void)
     if (! fields)
         exit (1);
 
-    audtool_whine ("Field names include, but are not limited to:\n");
+    audtool_whine ("Field names include:\n");
 
     char * * tmp = fields;
     int col = 0;
 
     g_printerr ("         ");
 
-    while (tmp && * tmp)
+    while (* tmp)
     {
         col += g_utf8_strlen (* tmp, -1);
 

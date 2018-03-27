@@ -25,9 +25,9 @@
 
 struct commandhandler
 {
-    char * name;
+    const char * name;
     void (* handler) (int argc, char * * argv);
-    char * desc;
+    const char * desc;
     int args;
 };
 
@@ -59,6 +59,8 @@ void get_current_song_info (int argc, char * * argv);
 void get_volume (int, char * *);
 void set_volume (int, char * *);
 
+void select_displayed (int, char * *);
+void select_playing (int, char * *);
 void playlist_position (int, char * *);
 void playlist_advance (int, char * *);
 void playlist_auto_advance_status (int, char * *);
@@ -85,7 +87,15 @@ void playlist_stop_after_toggle (int argc, char * * argv);
 void playlist_tuple_field_data (int, char * * argv);
 void playlist_enqueue_to_temp (int argc, char * * argv);
 void playlist_ins_url_string (int argc, char * * argv);
-void playlist_title (int, char * *);
+
+void number_of_playlists (int argc, char * * argv);
+void current_playlist (int argc, char * * argv);
+void set_current_playlist (int argc, char * * argv);
+void playlist_title (int argc, char * * argv);
+void set_playlist_title (int argc, char * * argv);
+void new_playlist (int argc, char * * argv);
+void delete_current_playlist (int argc, char * * argv);
+void play_current_playlist (int argc, char * * argv);
 
 void playqueue_add (int, char * *);
 void playqueue_remove (int, char * *);
@@ -106,6 +116,8 @@ void playback_stopped (int, char * *);
 void playback_status (int, char * *);
 void playback_seek (int, char * *);
 void playback_seek_relative (int, char * *);
+void playback_record (int, char * *);
+void playback_recording (int, char * *);
 
 void mainwin_show (int, char * *);
 void show_preferences_window (int, char * *);
@@ -115,6 +127,10 @@ void shutdown_audacious_server (int, char * *);
 void show_about_window (int, char * *);
 
 void get_version (int argc, char * * argv);
+void plugin_is_enabled (int argc, char * * argv);
+void plugin_enable (int argc, char * * argv);
+void config_get (int argc, char * * argv);
+void config_set (int argc, char * * argv);
 
 void equalizer_get_eq (int argc, char * * argv);
 void equalizer_get_eq_preamp (int argc, char * * argv);

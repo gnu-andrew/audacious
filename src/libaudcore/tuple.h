@@ -26,156 +26,208 @@
 #ifndef LIBAUDCORE_TUPLE_H
 #define LIBAUDCORE_TUPLE_H
 
-#include <libaudcore/core.h>
+#include <libaudcore/objects.h>
 
-/** Ordered enum for basic #Tuple fields.
- * @sa TupleBasicType
- */
-enum {
-    FIELD_ARTIST = 0,
-    FIELD_TITLE,        /**< Song title */
-    FIELD_ALBUM,        /**< Album name */
-    FIELD_COMMENT,      /**< Freeform comment */
-    FIELD_GENRE,        /**< Song's genre */
+struct ReplayGainInfo;
+struct TupleData;
+class PluginHandle;
+class VFSFile;
 
-    FIELD_TRACK_NUMBER,
-    FIELD_LENGTH,       /**< Track length in milliseconds */
-    FIELD_YEAR,         /**< Year of production/performance/etc */
-    FIELD_QUALITY,      /**< String representing quality, such as
-                             "lossy", "lossless", "sequenced"  */
+class Tuple
+{
+public:
+    /* Smart pointer to the actual TupleData struct.
+     * Uses create-on-write and copy-on-write. */
 
-    FIELD_CODEC,        /**< Codec name or similar */
-    FIELD_FILE_NAME,    /**< File name part of the location URI */
-    FIELD_FILE_PATH,    /**< Path part of the location URI */
-    FIELD_FILE_EXT,     /**< Filename extension part of the location URI */
+    enum State {
+        Initial,  /* Song info has not yet been read */
+        Valid,    /* Song info has been successfully read */
+        Failed    /* Song info could not be read */
+    };
 
-    FIELD_SONG_ARTIST,
-    FIELD_COMPOSER,     /**< Composer of song, if different than artist. */
-    FIELD_PERFORMER,
-    FIELD_COPYRIGHT,
-    FIELD_DATE,
-    FIELD_MBID,         /** MusicBrainz identifer for the song */
+    enum Field {
+        Invalid = -1,
 
-    FIELD_SUBSONG_ID,   /**< Index number of subsong/tune */
-    FIELD_SUBSONG_NUM,  /**< Total number of subsongs in the file */
-    FIELD_MIMETYPE,
-    FIELD_BITRATE,      /**< Bitrate in kbps */
+        Title = 0,    /* Song title */
+        Artist,       /* Song artist */
+        Album,        /* Album name */
+        AlbumArtist,  /* Artist for entire album, if different than song artist */
+        Comment,      /* Freeform comment */
+        Genre,        /* Song's genre */
+        Year,         /* Year of production, performance, etc. */
 
-    FIELD_SEGMENT_START,
-    FIELD_SEGMENT_END,
+        Composer,     /* Composer, if different than artist */
+        Performer,    /* Performer, if different than artist */
+        Copyright,    /* Copyright declaration */
+        Date,         /* Date of production, performance, etc. */
+	MBID,         /* MusicBrainz identifer for the song */
 
-    /* Preserving replay gain information accurately is a challenge since there
-     * are several differents formats around.  We use an integer fraction, with
-     * the denominator stored in the *_UNIT fields.  For example, if ALBUM_GAIN
-     * is 512 and GAIN_UNIT is 256, then the album gain is +2 dB.  If TRACK_PEAK
-     * is 787 and PEAK_UNIT is 1000, then the peak volume is 0.787 in a -1.0 to
-     * 1.0 range. */
-    FIELD_GAIN_ALBUM_GAIN,
-    FIELD_GAIN_ALBUM_PEAK,
-    FIELD_GAIN_TRACK_GAIN,
-    FIELD_GAIN_TRACK_PEAK,
-    FIELD_GAIN_GAIN_UNIT,
-    FIELD_GAIN_PEAK_UNIT,
+        Track,        /* Track number */
+        Length,       /* Track length in milliseconds */
 
-    TUPLE_FIELDS
+        Bitrate,      /* Bitrate in kilobits (1000 bits)/sec */
+        Codec,        /* Codec name, such as "Ogg Vorbis" */
+        Quality,      /* String representing quality, such as "Stereo, 44 kHz" */
+
+        Basename,     /* Base filename, not including the folder path */
+        Path,         /* Folder path, including the trailing "/" */
+        Suffix,       /* Filename extension, not including the "." */
+
+        AudioFile,    /* URI of audio file, if different from the nominal URI
+                       * (e.g. for a cuesheet entry, where the nominal URI
+                       * points to the .cue file) */
+
+        Subtune,      /* Index number of subtune */
+        NumSubtunes,  /* Total number of subtunes in the file */
+
+        StartTime,    /* Playback start point (used for cuesheets) */
+        EndTime,      /* Playback end point (used for cuesheets) */
+
+        /* Preserving replay gain information accurately is a challenge since there
+         * are several differents formats around.  We use an integer fraction, with
+         * the denominator stored in the *Divisor fields.  For example, if AlbumGain
+         * is 512 and GainDivisor is 256, then the album gain is +2 dB.  If TrackPeak
+         * is 787 and PeakDivisor is 1000, then the peak volume is 0.787 in a -1.0 to
+         * 1.0 range. */
+        AlbumGain,
+        AlbumPeak,
+        TrackGain,
+        TrackPeak,
+        GainDivisor,
+        PeakDivisor,
+
+        /* Title formatted for display; input plugins do not need to set this field */
+        FormattedTitle,
+
+        n_fields
+    };
+
+    typedef aud::range<Field, Field (0), Field (n_fields - 1)> all_fields;
+
+    enum ValueType {
+        String,
+        Int,
+        Empty
+    };
+
+    static Field field_by_name (const char * name);
+    static const char * field_get_name (Field field);
+    static ValueType field_get_type (Field field);
+
+    constexpr Tuple () :
+        data (nullptr) {}
+
+    ~Tuple ();
+
+    Tuple (Tuple && b) :
+        data (b.data)
+    {
+        b.data = nullptr;
+    }
+
+    Tuple & operator= (Tuple && b)
+        { return aud::move_assign (* this, std::move (b)); }
+
+    bool operator== (const Tuple & b) const;
+    bool operator!= (const Tuple & b) const
+        { return ! operator== (b); }
+
+    Tuple ref () const;
+
+    /* Gets/sets the state of the song info.  Before setting the state to Valid,
+     * you should ensure that, at a minimum, set_filename() has been called. */
+    State state () const;
+    void set_state (State st);
+
+    /* Returns the value type of a field if set, otherwise Empty. */
+    ValueType get_value_type (Field field) const;
+
+    /* Convenience functions */
+    bool valid () const
+        { return state () == Valid; }
+    bool is_set (Field field) const
+        { return get_value_type (field) != Empty; }
+
+    /* Returns the integer value of a field if set, otherwise -1.  If you need
+     * to distinguish between a value of -1 and an unset value, use
+     * get_value_type(). */
+    int get_int (Field field) const;
+
+    /* Returns the string value of a field if set, otherwise null. */
+    ::String get_str (Field field) const;
+
+    /* Sets a field to the integer value <x>. */
+    void set_int (Field field, int x);
+
+    /* Sets a field to the string value <str>.  If <str> is not valid UTF-8, it
+     * will be converted according to the user's character set detection rules.
+     * Equivalent to unset() if <str> is null. */
+    void set_str (Field field, const char * str);
+
+    /* Clears any value that a field is currently set to. */
+    void unset (Field field);
+
+    /* Parses the URI <filename> and sets Basename, Path, Suffix, and Subtune accordingly. */
+    void set_filename (const char * filename);
+
+    /* Fills in format-related fields (specifically Codec, Quality,
+     * and Bitrate).  Plugins should use this function instead of setting
+     * these fields individually to allow a consistent style across file
+     * formats.  <format> should be a brief description such as "Ogg Vorbis",
+     * "MPEG-1 layer 3", "Audio CD", and so on.  <samplerate> is in Hertz.
+     * <bitrate> is in (decimal) kbps. */
+    void set_format (const char * format, int channels, int samplerate, int bitrate);
+
+    /* In addition to the normal fields, tuples contain an integer array of
+     * subtune ID numbers.  This function sets that array.  It also sets
+     * NumSubtunes to the value <n_subtunes>. */
+    void set_subtunes (short n_subtunes, const short * subtunes);
+
+    /* Returns the length of the subtune array.  If the array has not been set,
+     * returns zero.  Note that if NumSubtunes is changed after
+     * set_subtunes() is called, this function returns the value <n_subtunes>
+     * passed to set_subtunes(), not the value of NumSubtunes. */
+    short get_n_subtunes () const;
+
+    /* Returns the <n>th member of the subtune array. */
+    short get_nth_subtune (short n) const;
+
+    /* Sets a Replay Gain field pair from a decimal string. */
+    void set_gain (Field field, Field unit_field, const char * str);
+
+    /* Returns true if minimal ReplayGainInfo is present. */
+    bool has_replay_gain () const;
+    /* Fills ReplayGainInfo struct from various fields. */
+    ReplayGainInfo get_replay_gain () const;
+
+    /* Set various fields based on the ICY metadata of <stream>.  Returns true
+     * if any fields were changed. */
+    bool fetch_stream_info (VFSFile & stream);
+
+    /* Guesses the song title, artist, and album, if not already set, from the
+     * filename. */
+    void generate_fallbacks ();
+
+    /* Guesses only the song title, if not already set, from the filename. */
+    void generate_title ();
+
+    /* Removes guesses made by generate_fallbacks().  This function should be
+     * called, for example, before writing a song tag from the tuple. */
+    void delete_fallbacks ();
+
+private:
+    TupleData * data;
 };
 
-typedef enum {
-    TUPLE_STRING,
-    TUPLE_INT,
-    TUPLE_UNKNOWN
-} TupleValueType;
+/* somewhat out of place here */
+struct PlaylistAddItem
+{
+    String filename;
+    Tuple tuple;
+    PluginHandle * decoder;
 
-int tuple_field_by_name (const char * name);
-const char * tuple_field_get_name (int field);
-TupleValueType tuple_field_get_type (int field);
-
-typedef struct _Tuple Tuple;
-typedef struct _TupleFormatter TupleFormatter;
-
-/* Creates a new, blank tuple with a reference count of one. */
-Tuple * tuple_new (void);
-
-/* Increments the reference count of <tuple> by one. */
-Tuple * tuple_ref (Tuple * tuple);
-
-/* Decrements the reference count of <tuple> by one.  If the reference count
- * drops to zero, releases all memory used by <tuple>.  If <tuple> is NULL, does
- * nothing. */
-void tuple_unref (Tuple * tuple);
-
-/* Makes a copy of <tuple>.  Only use tuple_copy() if you need to modify one
- * copy of the tuple while not modifying the other.  In most cases, tuple_ref()
- * is more appropriate. */
-Tuple * tuple_copy (const Tuple * tuple);
-
-/* Parses the URI <filename> and sets FIELD_FILE_NAME, FIELD_FILE_PATH,
- * FIELD_FILE_EXT, and FIELD_SUBSONG_ID accordingly. */
-void tuple_set_filename (Tuple * tuple, const char * filename);
-
-/* Convenience function, equivalent to calling tuple_new() and then
- * tuple_set_filename(). */
-Tuple * tuple_new_from_filename (const char * filename);
-
-/* Sets a field to the integer value <x>. */
-void tuple_set_int (Tuple * tuple, int field, int x);
-
-/* Sets a field to the string value <str>.  If <str> is not valid UTF-8, it will
- * be converted according to the user's character set detection rules.  As a
- * special case, if <str> is NULL, the result is equivalent to calling
- * tuple_unset(). */
-void tuple_set_str (Tuple * tuple, int field, const char * str);
-
-/* Clears any value that a field is currently set to. */
-void tuple_unset (Tuple * tuple, int field);
-
-/* Returns the value type of a field, or TUPLE_UNKNOWN if the field has not been
- * set to any value. */
-TupleValueType tuple_get_value_type (const Tuple * tuple, int field);
-
-/* Returns the string value of a field.  The returned string is pooled and must
- * be released with str_unref() when no longer needed.  If the field has not
- * been set to any value, returns NULL. */
-char * tuple_get_str (const Tuple * tuple, int field);
-
-/* Returns the integer value of a field.  If the field has not been set to any
- * value, returns -1.  If you need to distinguish between a value of -1 and a
- * field not set to any value, use tuple_get_value_type(). */
-int tuple_get_int (const Tuple * tuple, int field);
-
-/* Fills in format-related fields (specifically FIELD_CODEC, FIELD_QUALITY, and
- * FIELD_BITRATE).  Plugins should use this function instead of setting these
- * fields individually so that the style is consistent across file formats.
- * <format> should be a brief description such as "Microsoft WAV", "MPEG-1 layer
- * 3", "Audio CD", and so on.  <samplerate> is in Hertz.  <bitrate> is in 1000
- * bits per second. */
-void tuple_set_format (Tuple * tuple, const char * format, int channels, int
- samplerate, int bitrate);
-
-/* In addition to the normal fields, tuples contain an integer array of subtune
- * ID numbers.  This function sets that array.  It also sets FIELD_SUBSONG_NUM
- * to the value <n_subtunes>. */
-void tuple_set_subtunes (Tuple * tuple, int n_subtunes, const int * subtunes);
-
-/* Returns the length of the subtune array.  If the array has not been set,
- * returns zero.  Note that if FIELD_SUBSONG_NUM is changed after
- * tuple_set_subtunes() is called, this function returns the value <n_subtunes>
- * passed to tuple_set_subtunes(), not the value of FIELD_SUBSONG_NUM. */
-int tuple_get_n_subtunes (Tuple * tuple);
-
-/* Returns the <n>th member of the subtune array. */
-int tuple_get_nth_subtune (Tuple * tuple, int n);
-
-/* Creates a tuple formatter object for the given format.  The syntax of
- * <format> is documented in tuple_formatter.c. */
-TupleFormatter * tuple_formatter_new (const char * format);
-
-/* Destroys a tuple formatter object. */
-void tuple_formatter_free (TupleFormatter * formatter);
-
-/* Generates a title string for <tuple> using the given formatter object.  The
- * returned string is pooled and must be released with str_unref() when no
- * longer needed.  Never returns NULL, but may return an empty string. */
-char * tuple_format_title (TupleFormatter * formatter, const Tuple * tuple);
+    PlaylistAddItem copy () const
+        { return {filename, tuple.ref (), decoder}; }
+};
 
 #endif /* LIBAUDCORE_TUPLE_H */

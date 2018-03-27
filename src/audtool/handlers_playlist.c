@@ -24,6 +24,16 @@
 #include "audtool.h"
 #include "wrappers.h"
 
+void select_displayed (int argc, char * * argv)
+{
+    obj_audacious_call_select_displayed_playlist_sync (dbus_proxy, NULL, NULL);
+}
+
+void select_playing (int argc, char * * argv)
+{
+    obj_audacious_call_select_playing_playlist_sync (dbus_proxy, NULL, NULL);
+}
+
 void playlist_reverse (int argc, char * * argv)
 {
     obj_audacious_call_reverse_sync (dbus_proxy, NULL, NULL);
@@ -140,6 +150,31 @@ void playlist_song (int argc, char * * argv)
     g_free (title);
 }
 
+void number_of_playlists (int argc, char * * argv)
+{
+    int playlists = 0;
+    obj_audacious_call_number_of_playlists_sync (dbus_proxy, & playlists, NULL, NULL);
+    audtool_report ("%d", playlists);
+}
+
+void current_playlist (int argc, char * * argv)
+{
+    int playlist = -1;
+    obj_audacious_call_get_active_playlist_sync (dbus_proxy, & playlist, NULL, NULL);
+    audtool_report ("%d", playlist + 1);
+}
+
+void set_current_playlist (int argc, char * * argv)
+{
+    if (argc < 2)
+    {
+        audtool_whine_args (argv[0], "<number>");
+        exit (1);
+    }
+
+    obj_audacious_call_set_active_playlist_sync (dbus_proxy, atoi (argv[1]) - 1, NULL, NULL);
+}
+
 void playlist_title (int argc, char * * argv)
 {
     char * title = NULL;
@@ -150,6 +185,32 @@ void playlist_title (int argc, char * * argv)
 
     audtool_report ("%s", title);
     g_free (title);
+}
+
+void set_playlist_title (int argc, char * * argv)
+{
+    if (argc < 2)
+    {
+        audtool_whine_args (argv[0], "<title>");
+        exit (1);
+    }
+
+    obj_audacious_call_set_active_playlist_name_sync (dbus_proxy, argv[1], NULL, NULL);
+}
+
+void new_playlist (int argc, char * * argv)
+{
+    obj_audacious_call_new_playlist_sync (dbus_proxy, NULL, NULL);
+}
+
+void delete_current_playlist (int argc, char * * argv)
+{
+    obj_audacious_call_delete_active_playlist_sync (dbus_proxy, NULL, NULL);
+}
+
+void play_current_playlist (int argc, char * * argv)
+{
+    obj_audacious_call_play_active_playlist_sync (dbus_proxy, NULL, NULL);
 }
 
 void playlist_song_length (int argc, char * * argv)

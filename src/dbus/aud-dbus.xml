@@ -2,7 +2,7 @@
 
 <!--
  * aud-dbus.xml
- * Copyright 2007-2010 Ben Tucker, Yoshiki Yazawa, Matti Hämäläinen, and
+ * Copyright 2007-2016 Ben Tucker, Yoshiki Yazawa, Matti Hämäläinen, and
  *                     John Lindgren
  *
  * Redistribution and use in source and binary forms, with or without
@@ -21,17 +21,48 @@
  -->
 
 <node name="/">
-    <!-- Audacious General Information -->
     <interface name="org.atheme.audacious">
+
+        <!-- General Commands -->
+        <!-- ++++++++++++++++ -->
+
         <!-- Audacious version -->
         <method name="Version">
             <arg type="s" direction="out" name="version"/>
         </method>
 
+        <method name="PluginIsEnabled">
+            <arg type="s" direction="in" name="plugin" />
+            <arg type="b" direction="out" name="enabled" />
+        </method>
+
+        <method name="PluginEnable">
+            <arg type="s" direction="in" name="plugin" />
+            <arg type="b" direction="in" name="enable" />
+        </method>
+
+        <method name="ConfigGet">
+            <arg type="s" direction="in" name="section" />
+            <arg type="s" direction="in" name="name" />
+            <arg type="s" direction="out" name="value" />
+        </method>
+
+        <method name="ConfigSet">
+            <arg type="s" direction="in" name="section" />
+            <arg type="s" direction="in" name="name" />
+            <arg type="s" direction="in" name="value" />
+        </method>
+
         <!-- Quit Audacious -->
         <method name="Quit" />
 
-        <!-- Open files (Eject) -->
+        <!-- Show "Add Files" dialog -->
+        <method name="ShowFilebrowser">
+            <arg type="b" direction="in" name="show"/>
+        </method>
+
+        <!-- Show "Open Files" dialog -->
+        <!-- (same as "eject" button in a Winamp skin) -->
         <method name="Eject" />
 
         <!-- Main window visibility -->
@@ -44,6 +75,26 @@
             <arg type="b" direction="in" name="show"/>
         </method>
 
+        <!-- Show preferences window -->
+        <method name="ShowPrefsBox">
+            <arg type="b" direction="in" name="show"/>
+        </method>
+
+        <!-- Show about window -->
+        <method name="ShowAboutBox">
+            <arg type="b" direction="in" name="show"/>
+        </method>
+
+        <!-- Show jump to file window -->
+        <method name="ShowJtfBox">
+            <arg type="b" direction="in" name="show"/>
+        </method>
+
+        <!-- Send startup notification -->
+        <method name="StartupNotify">
+            <arg type="s" direction="in" name="id"/>
+        </method>
+
         <!-- Get names of available 'standard' tuple fields -->
         <method name="GetTupleFields">
             <!-- Return array of tuple field names -->
@@ -51,11 +102,16 @@
         </method>
 
         <!-- Playback Information/Manipulation -->
+        <!-- +++++++++++++++++++++++++++++++++ -->
+
         <!-- Begin or resume playback -->
         <method name="Play" />
 
         <!-- Pause playback -->
         <method name="Pause" />
+
+        <!-- Either play or pause -->
+        <method name="PlayPause" />
 
         <!-- Stop playback -->
         <method name="Stop" />
@@ -85,9 +141,22 @@
             <arg type="s" direction="out" name="status"/>
         </method>
 
+        <!-- Toggle recording of stream -->
+        <method name="Record" />
+
+        <!-- Is stream recording enabled? -->
+        <method name="Recording">
+            <arg type="b" direction="out" name="is_recording"/>
+        </method>
+
         <!-- What is the bitrate, frequency, and number of channels of the -->
-        <!-- current audio format? -->
+        <!-- current audio format?  ("Info" and "GetInfo" are synonymous) -->
         <method name="Info">
+            <arg type="i" direction="out" name="rate"/>
+            <arg type="i" direction="out" name="freq"/>
+            <arg type="i" direction="out" name="nch"/>
+        </method>
+        <method name="GetInfo">
             <arg type="i" direction="out" name="rate"/>
             <arg type="i" direction="out" name="freq"/>
             <arg type="i" direction="out" name="nch"/>
@@ -104,6 +173,9 @@
             <!-- Position of song, in ms, to seek to -->
             <arg type="u" direction="in" name="pos"/>
         </method>
+
+        <!-- Volume and Equalizer -->
+        <!-- ++++++++++++++++++++ -->
 
         <!-- What is the playback volume? -->
         <method name="Volume">
@@ -127,7 +199,47 @@
             <arg type="i" direction="out" name="balance"/>
         </method>
 
+        <!-- equalizer -->
+        <method name="GetEq">
+            <arg type="d" direction="out" name="preamp"/>
+            <arg type="ad" direction="out" name="bands"/>
+        </method>
+
+        <method name="GetEqPreamp">
+            <arg type="d" direction="out" name="preamp"/>
+        </method>
+
+        <method name="GetEqBand">
+            <arg type="i" direction="in" name="band"/>
+            <arg type="d" direction="out" name="value"/>
+        </method>
+
+        <method name="SetEq">
+            <arg type="d" direction="in" name="preamp"/>
+            <arg type="ad" direction="in" name="bands"/>
+        </method>
+
+        <method name="SetEqPreamp">
+            <arg type="d" direction="in" name="preamp"/>
+        </method>
+
+        <method name="SetEqBand">
+            <arg type="i" direction="in" name="band"/>
+            <arg type="d" direction="in" name="value"/>
+        </method>
+
+        <!-- Activate/Deactivate Equalizer -->
+        <method name="EqualizerActivate">
+            <arg type="b" direction="in" name="active"/>
+        </method>
+
         <!-- Playlist Information/Manipulation -->
+        <!-- +++++++++++++++++++++++++++++++++ -->
+
+        <!-- Select playlist to control -->
+        <method name="SelectDisplayedPlaylist"/>
+        <method name="SelectPlayingPlaylist"/>
+
         <!-- Playlist position -->
         <method name="Position">
             <!-- Return position of current song in current playlist -->
@@ -200,16 +312,23 @@
             <arg type="u" direction="in" name="pos"/>
         </method>
 
-        <!-- Add some file to the current playlist -->
+        <!-- Add (append) a file to the current playlist -->
+        <!-- ("Add", "AddUrl", and "PlaylistAdd" are synonymous) -->
         <method name="Add">
-            <!-- File to add -->
+            <!-- URI of file to add -->
             <arg type="s" direction="in" name="file"/>
         </method>
-
-        <!-- Add some URL to the current playlist -->
         <method name="AddUrl">
-            <!-- URL to add -->
             <arg type="s" direction="in" name="url"/>
+        </method>
+        <method name="PlaylistAdd">
+            <arg type="s" direction="in" name="list"/>
+        </method>
+
+        <!-- Insert a file at the given position in the playlist -->
+        <method name="PlaylistInsUrlString">
+            <arg type="s" direction="in" name="url"/>
+            <arg type="i" direction="in" name="pos"/>
         </method>
 
         <!-- Add a list of files -->
@@ -222,6 +341,11 @@
         <method name="OpenList">
             <!-- Array of filenames to open -->
             <arg type="as" direction="in" name="filenames"/>
+        </method>
+
+        <!-- Open a file in a temporary playlist -->
+        <method name="PlaylistEnqueueToTemp">
+            <arg type="s" direction="in" name="url"/>
         </method>
 
         <!-- Open a list of files in a temporary playlist -->
@@ -271,28 +395,8 @@
         <!-- Toggle stop-after-song -->
         <method name="ToggleStopAfter" />
 
-        <!-- Show preferences window -->
-        <method name="ShowPrefsBox">
-            <arg type="b" direction="in" name="show"/>
-        </method>
-
-        <!-- Show about window -->
-        <method name="ShowAboutBox">
-            <arg type="b" direction="in" name="show"/>
-        </method>
-
-        <!-- Show jump to file window -->
-        <method name="ShowJtfBox">
-            <arg type="b" direction="in" name="show"/>
-        </method>
-
-        <!-- Show filebrowser -->
-        <method name="ShowFilebrowser">
-            <arg type="b" direction="in" name="show"/>
-        </method>
-
-        <!-- Either play or pause -->
-        <method name="PlayPause" />
+        <!-- Playlist Queue -->
+        <!-- ++++++++++++++ -->
 
         <!-- Playqueue get playlist pos -->
         <method name="QueueGetListPos">
@@ -306,24 +410,8 @@
             <arg type="u" direction="out" name="qpos"/>
         </method>
 
-        <!-- Get Info -->
-        <method name="GetInfo">
-            <arg type="i" direction="out" name="rate"/>
-            <arg type="i" direction="out" name="freq"/>
-            <arg type="i" direction="out" name="nch"/>
-        </method>
-
         <method name="GetPlayqueueLength">
             <arg type="i" direction="out" name="length"/>
-        </method>
-
-        <method name="PlaylistInsUrlString">
-            <arg type="s" direction="in" name="url"/>
-            <arg type="i" direction="in" name="pos"/>
-        </method>
-
-        <method name="PlaylistAdd">
-            <arg type="s" direction="in" name="list"/>
         </method>
 
         <method name="PlayqueueAdd">
@@ -341,46 +429,34 @@
             <arg type="b" direction="out" name="is_queued"/>
         </method>
 
-        <method name="PlaylistEnqueueToTemp">
-            <arg type="s" direction="in" name="url"/>
+        <!-- Add/Remove/Switch Playlists -->
+        <!-- +++++++++++++++++++++++++++ -->
+
+        <method name="NumberOfPlaylists">
+            <arg type="i" direction="out" name="count" />
         </method>
 
-        <!-- equalizer -->
-        <method name="GetEq">
-            <arg type="d" direction="out" name="preamp"/>
-            <arg type="ad" direction="out" name="bands"/>
+        <method name="GetActivePlaylist">
+            <arg type="i" direction="out" name="plnum" />
         </method>
 
-        <method name="GetEqPreamp">
-            <arg type="d" direction="out" name="preamp"/>
-        </method>
-
-        <method name="GetEqBand">
-            <arg type="i" direction="in" name="band"/>
-            <arg type="d" direction="out" name="value"/>
-        </method>
-
-        <method name="SetEq">
-            <arg type="d" direction="in" name="preamp"/>
-            <arg type="ad" direction="in" name="bands"/>
-        </method>
-
-        <method name="SetEqPreamp">
-            <arg type="d" direction="in" name="preamp"/>
-        </method>
-
-        <method name="SetEqBand">
-            <arg type="i" direction="in" name="band"/>
-            <arg type="d" direction="in" name="value"/>
-        </method>
-
-        <!-- Activate/Deactivate Equalizer -->
-        <method name="EqualizerActivate">
-            <arg type="b" direction="in" name="active"/>
+        <method name="SetActivePlaylist">
+            <arg type="i" direction="in" name="plnum" />
         </method>
 
         <method name="GetActivePlaylistName">
             <arg type="s" direction="out" name="plname" />
         </method>
+
+        <method name="SetActivePlaylistName">
+            <arg type="s" direction="in" name="plname" />
+        </method>
+
+        <method name="NewPlaylist" />
+
+        <method name="DeleteActivePlaylist" />
+
+        <method name="PlayActivePlaylist" />
+
     </interface>
 </node>

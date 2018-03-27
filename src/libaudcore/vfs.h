@@ -29,106 +29,152 @@
 
 #include <stdint.h>
 
-#include <libaudcore/core.h>
+#include <libaudcore/export.h>
+#include <libaudcore/index.h>
+#include <libaudcore/objects.h>
 
-/* equivalent to G_FILE_TEST_XXX */
-#define VFS_IS_REGULAR    (1 << 0)
-#define VFS_IS_SYMLINK    (1 << 1)
-#define VFS_IS_DIR        (1 << 2)
-#define VFS_IS_EXECUTABLE (1 << 3)
-#define VFS_EXISTS        (1 << 4)
-
-/** @struct VFSFile */
-typedef struct _VFSFile VFSFile;
-/** @struct VFSConstructor */
-typedef const struct _VFSConstructor VFSConstructor;
-
-/**
- * @struct _VFSConstructor
- * #VFSConstructor objects contain the base vtables used for extrapolating
- * a VFS stream. #VFSConstructor objects should be considered %virtual in
- * nature. VFS base vtables are registered via vfs_register_transport().
- */
-struct _VFSConstructor {
-    /** A function pointer which points to a fopen implementation. */
-    void * (* vfs_fopen_impl) (const char * filename, const char * mode);
-    /** A function pointer which points to a fclose implementation. */
-    int (* vfs_fclose_impl) (VFSFile * file);
-
-    /** A function pointer which points to a fread implementation. */
-    int64_t (* vfs_fread_impl) (void * ptr, int64_t size, int64_t nmemb, VFSFile *
-     file);
-    /** A function pointer which points to a fwrite implementation. */
-    int64_t (* vfs_fwrite_impl) (const void * ptr, int64_t size, int64_t nmemb,
-     VFSFile * file);
-
-    void (* obs_getc) (void); // obsolete
-    void (* obs_ungetc) (void); // obsolete
-
-    /** A function pointer which points to a fseek implementation. */
-    int (* vfs_fseek_impl) (VFSFile * file, int64_t offset, int whence);
-
-    void (* obs_rewind) (void); // obsolete
-
-    /** A function pointer which points to a ftell implementation. */
-    int64_t (* vfs_ftell_impl) (VFSFile * file);
-    /** A function pointer which points to a feof implementation. */
-    bool_t (* vfs_feof_impl) (VFSFile * file);
-    /** A function pointer which points to a ftruncate implementation. */
-    int (* vfs_ftruncate_impl) (VFSFile * file, int64_t length);
-    /** A function pointer which points to a fsize implementation. */
-    int64_t (* vfs_fsize_impl) (VFSFile * file);
-
-    /** A function pointer which points to a (stream) metadata fetching implementation. */
-    char * (* vfs_get_metadata_impl) (VFSFile * file, const char * field);
+enum VFSFileTest {
+    VFS_IS_REGULAR    = (1 << 0),
+    VFS_IS_SYMLINK    = (1 << 1),
+    VFS_IS_DIR        = (1 << 2),
+    VFS_IS_EXECUTABLE = (1 << 3),
+    VFS_EXISTS        = (1 << 4),
+    VFS_NO_ACCESS     = (1 << 5)
 };
 
-#ifdef __GNUC__
-#define WARN_RETURN __attribute__ ((warn_unused_result))
-#else
-#define WARN_RETURN
-#endif
+enum VFSReadOptions {
+    VFS_APPEND_NULL    = (1 << 0),
+    VFS_IGNORE_MISSING = (1 << 1)
+};
 
-VFSFile * vfs_new (const char * path, VFSConstructor * vtable, void * handle) WARN_RETURN;
-const char * vfs_get_filename (VFSFile * file) WARN_RETURN;
-void * vfs_get_handle (VFSFile * file) WARN_RETURN;
+enum VFSSeekType {
+    VFS_SEEK_SET = 0,
+    VFS_SEEK_CUR = 1,
+    VFS_SEEK_END = 2
+};
 
-VFSFile * vfs_fopen (const char * path, const char * mode) WARN_RETURN;
-int vfs_fclose (VFSFile * file);
+#ifdef WANT_VFS_STDIO_COMPAT
 
-int64_t vfs_fread (void * ptr, int64_t size, int64_t nmemb, VFSFile * file)
- WARN_RETURN;
-int64_t vfs_fwrite (const void * ptr, int64_t size, int64_t nmemb, VFSFile * file)
- WARN_RETURN;
+#include <stdio.h>
 
-int vfs_getc (VFSFile * stream) WARN_RETURN;
-int vfs_ungetc (int c, VFSFile * stream) WARN_RETURN;
-char * vfs_fgets (char * s, int n, VFSFile * stream) WARN_RETURN;
-int vfs_fputs (const char * s, VFSFile * stream) WARN_RETURN;
-bool_t vfs_feof (VFSFile * file) WARN_RETURN;
-int vfs_fprintf (VFSFile * stream, char const * format, ...) __attribute__
- ((__format__ (__printf__, 2, 3)));
+constexpr int from_vfs_seek_type (VFSSeekType whence)
+{
+    return (whence == VFS_SEEK_SET) ? SEEK_SET :
+           (whence == VFS_SEEK_CUR) ? SEEK_CUR :
+           (whence == VFS_SEEK_END) ? SEEK_END : -1;
+}
 
-int vfs_fseek (VFSFile * file, int64_t offset, int whence) WARN_RETURN;
-int64_t vfs_ftell (VFSFile * file) WARN_RETURN;
-int64_t vfs_fsize (VFSFile * file) WARN_RETURN;
-int vfs_ftruncate (VFSFile * file, int64_t length) WARN_RETURN;
+constexpr VFSSeekType to_vfs_seek_type (int whence)
+{
+    return (whence == SEEK_SET) ? VFS_SEEK_SET :
+           (whence == SEEK_CUR) ? VFS_SEEK_CUR :
+           (whence == SEEK_END) ? VFS_SEEK_END : (VFSSeekType) -1;
+}
 
-bool_t vfs_is_streaming (VFSFile * file) WARN_RETURN;
+#endif // WANT_VFS_STDIO_COMPAT
 
-/* free returned string with str_unref() */
-char * vfs_get_metadata (VFSFile * file, const char * field) WARN_RETURN;
+// #undef POSIX functions/macros to avoid name conflicts
+#undef fread
+#undef fseek
+#undef ftell
+#undef fsize
+#undef feof
+#undef fwrite
+#undef ftruncate
+#undef fflush
 
-bool_t vfs_file_test (const char * path, int test) WARN_RETURN;
-bool_t vfs_is_writeable (const char * path) WARN_RETURN;
-bool_t vfs_is_remote (const char * path) WARN_RETURN;
+class LIBAUDCORE_PUBLIC VFSImpl
+{
+public:
+    VFSImpl () {}
+    virtual ~VFSImpl () {}
 
-void vfs_file_read_all (VFSFile * file, void * * buf, int64_t * size);
-void vfs_file_get_contents (const char * filename, void * * buf, int64_t * size);
+    VFSImpl (const VFSImpl &) = delete;
+    VFSImpl & operator= (const VFSImpl &) = delete;
 
-void vfs_set_lookup_func (VFSConstructor * (* func) (const char * scheme));
-void vfs_set_verbose (bool_t verbose);
+    virtual int64_t fread (void * ptr, int64_t size, int64_t nmemb) = 0;
+    virtual int fseek (int64_t offset, VFSSeekType whence) = 0;
 
-#undef WARN_RETURN
+    virtual int64_t ftell () = 0;
+    virtual int64_t fsize () = 0;
+    virtual bool feof () = 0;
+
+    virtual int64_t fwrite (const void * ptr, int64_t size, int64_t nmemb) = 0;
+    virtual int ftruncate (int64_t length) = 0;
+    virtual int fflush () = 0;
+
+    virtual String get_metadata (const char * field) { return String (); }
+};
+
+class VFSFile
+{
+public:
+    VFSFile () {}
+
+    VFSFile (const char * filename, VFSImpl * impl) :
+        m_filename (filename),
+        m_impl (impl) {}
+
+    VFSFile (const char * filename, const char * mode);
+
+    /* creates a temporary file (deleted when closed) */
+    static VFSFile tmpfile ();
+
+    explicit operator bool () const
+        { return (bool) m_impl; }
+    const char * filename () const
+        { return m_filename; }
+    const char * error () const
+        { return m_error; }
+
+    /* basic operations */
+
+    int64_t fread (void * ptr, int64_t size, int64_t nmemb) __attribute__ ((warn_unused_result));
+    int fseek (int64_t offset, VFSSeekType whence) __attribute__ ((warn_unused_result));
+
+    int64_t ftell ();
+    int64_t fsize ();
+    bool feof ();
+
+    int64_t fwrite (const void * ptr, int64_t size, int64_t nmemb) __attribute__ ((warn_unused_result));
+    int ftruncate (int64_t length) __attribute__ ((warn_unused_result));
+    int fflush () __attribute__ ((warn_unused_result));
+
+    /* used to read e.g. ICY metadata */
+    String get_metadata (const char * field);
+
+    /* the VFS layer buffers up to 256 KB of data at the beginning of files
+     * opened in read-only mode; this function disallows reading outside the
+     * buffered region (useful for probing the file type) */
+    void set_limit_to_buffer (bool limit);
+
+    /* utility functions */
+
+    /* reads the entire file into memory (limited to 16 MB) */
+    Index<char> read_all ();
+
+    /* reads data from another open file and appends it to this one */
+    bool copy_from (VFSFile & source, int64_t size = -1);
+
+    /* overwrites the entire file with the contents of another */
+    bool replace_with (VFSFile & source);
+
+    /* tests certain attributes of a file without opening it.
+     * the 2-argument version returns true if all requested tests passed.
+     * the 3-argument version returns a bitmask indicating which tests passed. */
+    static bool test_file (const char * filename, VFSFileTest test);
+    static VFSFileTest test_file (const char * filename, VFSFileTest test, String & error);
+
+    /* returns a sorted list of folder entries (as full URIs) */
+    static Index<String> read_folder (const char * filename, String & error);
+
+    /* convenience functions to read/write entire files */
+    static Index<char> read_file (const char * filename, VFSReadOptions options);
+    static bool write_file (const char * filename, const void * data, int64_t len);
+
+private:
+    String m_filename, m_error;
+    SmartPtr<VFSImpl> m_impl;
+};
 
 #endif /* LIBAUDCORE_VFS_H */
